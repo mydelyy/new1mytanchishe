@@ -1,0 +1,198 @@
+#include <easyx.h>
+#include <conio.h>
+#include <time.h>
+#include <cstdlib>//随机数生成所需要
+#define node_width 20
+//定义蛇的节点结构，包含x,y坐标
+typedef struct {
+    int x;
+    int y;
+}node;
+
+//绘制网格
+void paintGrid()
+{
+    for (int y = 0; y < 600; y += node_width)//横线
+    {
+        line(0, y, 800, y);
+    }
+    for (int x = 0; x < 800; x += node_width)//竖线
+    {
+        line(x, 0, x, 600);
+    }
+}
+
+//绘制蛇
+void paintSnake(node* snake, int n)
+{
+    for (int i = 0; i < n; i++)
+    {
+        int left = snake[i].x * node_width;//计算节点左侧横坐标
+        int top = snake[i].y * node_width;//顶  纵
+        int right = (snake[i].x + 1) * node_width;//右  横
+        int bottom = (snake[i].y + 1) * node_width;//底  纵
+        solidrectangle(left, top, right, bottom);//没有边框的实心矩形,矩形的左上角坐标(left, top)和右下角坐标(right, bottom)
+    }
+}
+
+//枚举蛇的移动方向
+enum direction
+{
+    eUp,
+    eDown,
+    eLeft,
+    eRight
+};
+
+//移动蛇
+node snakeMove(node* snake, int length, enum direction direction)
+{
+    node tail = snake[length - 1];//保存蛇尾信息，用于蛇增长时使用
+    //将蛇的节点向前移动一位，从蛇尾开始
+    for (int i = length - 1; i > 0; i--)
+    {
+        snake[i] = snake[i - 1];
+    }
+
+    node newHead = snake[0];//计算新的蛇头位置
+    //根据移动方向更新蛇头坐标
+    if (direction == eUp){newHead.y--;}//上
+    else if (direction == eDown){newHead.y++;}//下
+    else if (direction == eLeft){newHead.x--;}//左
+    else //  right
+    {
+        newHead.x++;
+    }
+
+    snake[0] = newHead;//更新蛇头位置
+    return tail;//返回移动前的蛇尾节点
+}
+
+//手动改变蛇的移动方向!!!!!
+direction changeDirection(enum direction d)//函数的输入参数是一个枚举类型enum direction   d：表示蛇当前的移动方向
+{
+    if (_kbhit() != 0)//检查键盘是否有按键操作
+    {
+        char c = _getch();//获取按键字符
+        //根据按键字符改变移动方向，同时防止蛇反方向移动
+        switch (c)
+        {
+            case 'w':
+                return(eUp);
+            case 's':
+                return(eDown);
+            case 'a':
+                return(eLeft);
+            case 'd':
+                return(eRight);
+        }
+    }else{
+        return(d);//d蛇当前的移动方向（更新后）
+    }
+}
+
+//绘制食物
+void paintFood(node food)
+{
+    int left = food.x * node_width;
+    int top = food.y * node_width;
+    int right = (food.x + 1) * node_width;//计算矩形的右边界坐标，通过将食物节点的横坐标加一后乘以每个节点的宽度。
+    int bottom = (food.y + 1) * node_width;
+    setfillcolor(YELLOW);
+    solidrectangle(left, top, right, bottom);//绘制实心矩形表示食物
+    setfillcolor(WHITE);
+}
+node createFood(node* snake, int length)
+{
+    node food; // 定义一个节点类型的变量food，用于存储生成的食物位置
+    while (1) // 无限循环，直到找到合适的食物位置
+    {
+        food.x = rand() % (800 / node_width); // 随机生成食物的横坐标
+        food.y = rand() % (600 / node_width); // 随机生成食物的纵坐标
+
+        int i;
+        // 检查食物是否与蛇的身体重叠
+        for (i = 0; i < length; i++)
+        {
+            if (snake[i].x == food.x && snake[i].y == food.y)
+            {
+                break; // 如果食物与蛇的身体重叠，则跳出循环重新生成食物位置
+            }
+        }
+        if (i < length)
+            continue; // 如果食物与蛇的身体重叠，继续循环重新生成食物位置
+        else break; // 如果食物与蛇的身体不重叠，退出循环
+    }
+    return food; // 返回生成的食物位置
+}
+
+int main()
+{
+    initgraph(800, 600);//初始化图形窗口大小
+    setbkcolor(RGB(184, 425, 205));  // 设置背景色
+    cleardevice();// 使用背景色清空窗口
+    //初始化蛇的位置和长度
+    node snake[100] = { {5, 7}, {4, 7}, {3, 7}, {2, 7}, {1, 7} };
+    int length = 5;
+
+    enum direction d = eRight; // 蛇的初始移动方向为向右
+
+    srand(static_cast<unsigned int>(time(NULL)));//初始化随机数种子（即食物）
+    node food = createFood(snake, length);//生成食物
+
+    // 自动化蛇的简单行为：(贪心算法的简化实现)根据食物的位置和蛇头的位置，选择使蛇头朝向食物移动的方向
+    /*auto moveTowardsFood = [&](enum direction & dir) {
+        if (food.y < snake[0].y && dir != eDown)//如果食物在蛇的上方，并且蛇当前不是向下移动，则蛇向上移动
+            dir = eUp;
+        else if (food.y > snake[0].y && dir != eUp)//如果食物在蛇的下方，并且蛇当前不是向上移动，则蛇向下移动
+            dir = eDown;
+        else if (food.x < snake[0].x && dir != eRight)//        左                右          左
+            dir = eLeft;
+        else if (food.x > snake[0].x && dir != eLeft)//         右                左          右
+            dir = eRight;
+    };*/
+
+while (1)
+{
+        cleardevice();
+        paintGrid();
+
+        d = changeDirection(d);//调用函数来改变蛇的移动方向，用户按键更新蛇的方向了并返回新的移动方向，通过将返回的新方向赋值给变量d，实现蛇的移动方向的改变
+
+        paintSnake(snake, length);
+        paintFood(food);
+        Sleep(80);  // 控制速度
+        //moveTowardsFood(d);  // 具体移动方向的决定代码，右
+        // 移动蛇
+        node lastTail = snakeMove(snake, length, d);
+
+        if (snake[0].x == food.x && snake[0].y == food.y)
+        {
+            if (length < sizeof(snake) / sizeof(snake[0])) // 确保不会超过蛇数组的大小
+            {
+                snake[length] = lastTail;  // 吃到食物，蛇长加1
+                length++;
+            }
+            food = createFood(snake, length);  // 生成新食物
+        }
+
+        // 检查是否撞到墙或自己
+        //“MessageBox”是 Visual Basic 中的一个函数，功能是弹出一个对话框，等待用户单击按钮，并返回一个 Integer 值表示用户单击了哪一个按钮。
+        if (snake[0].x < 0 || snake[0].x >= 800 / node_width || snake[0].y < 0 || snake[0].y >= 600 / node_width)
+        {
+            MessageBox(GetHWnd(), _T("Game Over: Snake hit the wall!"), _T("Game Over"), MB_OK);//？中文不行
+            break;  // 撞墙，游戏结束！！！
+        }
+        for (int i = 1; i < length; i++)
+        {
+            if (snake[0].x == snake[i].x && snake[0].y == snake[i].y)
+            {
+                MessageBox(GetHWnd(), _T("Game Over: Snake bit itself!"), _T("Game Over"), MB_OK);
+                break;  // 吃到自己，游戏结束！！！
+            }
+        }
+    }
+    getch();  // 等待按键
+    closegraph();  // 关闭图形窗口
+    return 0;
+}
